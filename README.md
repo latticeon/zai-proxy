@@ -107,7 +107,20 @@ docker compose up -d
 
 ## 代理池（可选）
 
-在项目根目录放置 `proxies.txt` 文件，每行一个 SOCKS5 代理，格式：
+在项目根目录放置 [`proxies.txt`](README.md) 文件，每行一个代理。当前支持 `SOCKS5`、`HTTP` 和 `HTTPS` 代理。
+
+推荐使用标准 URL 格式：
+
+```
+socks5://user:pass@127.0.0.1:1080
+socks5://127.0.0.1:1080
+http://user:pass@127.0.0.1:7890
+http://127.0.0.1:7890
+https://user:pass@127.0.0.1:8443
+https://127.0.0.1:8443
+```
+
+同时兼容旧版 `SOCKS5` 格式：
 
 ```
 ip:port:username:password
