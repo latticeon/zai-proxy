@@ -127,7 +127,26 @@ ip:port:username:password
 ip:port
 ```
 
-启动时自动加载，每次请求随机选择一个代理。不存在该文件则直连。
+只有在请求头带上 `X-Use-Proxy: 1` 时，请求才会使用代理；未携带该请求头时始终直连。即使携带了该请求头，如果当前没有可用代理，也会自动直连。
+
+启动时自动加载代理池，每次命中代理模式时随机选择一个代理。
+
+## 请求日志
+
+每个请求结束后都会输出一条摘要日志，包含以下信息：
+- 请求模式：`[PROXY]` 或 `[DIRECT]`
+- 请求类型
+- HTTP 方法和路径
+- 响应状态码
+- 响应字符数
+- 请求耗时
+
+示例：
+
+```text
+[PROXY] chat POST /v1/chat/completions status=200 chars=1234 duration=842.31ms
+[DIRECT] messages POST /v1/messages status=200 chars=987 duration=615.02ms
+```
 
 ## 获取 z.ai Token
 

@@ -16,9 +16,9 @@ func main() {
 	proxy.LoadProxies("proxies.txt")
 	version.StartVersionUpdater()
 
-	http.HandleFunc("/v1/models", handler.HandleModels)
-	http.HandleFunc("/v1/chat/completions", handler.HandleChatCompletions)
-	http.HandleFunc("/v1/messages", handler.HandleMessages)
+	http.HandleFunc("/v1/models", handler.WithRequestLogging("models", handler.HandleModels))
+	http.HandleFunc("/v1/chat/completions", handler.WithRequestLogging("chat", handler.HandleChatCompletions))
+	http.HandleFunc("/v1/messages", handler.WithRequestLogging("messages", handler.HandleMessages))
 
 	addr := ":" + config.Cfg.Port
 	logger.LogInfo("Server starting on %s", addr)

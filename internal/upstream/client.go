@@ -38,7 +38,7 @@ func ExtractAllImageURLs(messages []model.Message) []string {
 	return allImageURLs
 }
 
-func MakeUpstreamRequest(token string, messages []model.Message, modelName string, tools []model.Tool, toolChoice interface{}) (*http.Response, string, error) {
+func MakeUpstreamRequest(token string, messages []model.Message, modelName string, tools []model.Tool, toolChoice interface{}, useProxy bool) (*http.Response, string, error) {
 	payload, err := auth.DecodeJWTPayload(token)
 	if err != nil || payload == nil {
 		return nil, "", fmt.Errorf("invalid token")
@@ -76,7 +76,7 @@ func MakeUpstreamRequest(token string, messages []model.Message, modelName strin
 	urlToFileID := make(map[string]string)
 	var filesData []map[string]interface{}
 	if len(imageURLs) > 0 {
-		files, _ := UploadImages(token, imageURLs)
+		files, _ := UploadImages(token, imageURLs, useProxy)
 		for i, f := range files {
 			if i < len(imageURLs) {
 				urlToFileID[imageURLs[i]] = f.ID
@@ -244,7 +244,7 @@ func MakeUpstreamRequest(token string, messages []model.Message, modelName strin
 	req.Header.Set("Referer", fmt.Sprintf("https://chat.z.ai/c/%s", uuid.New().String()))
 	req.Header.Set("User-Agent", uarand.GetRandom())
 
-	client := proxy.GetHTTPClient()
+	client := proxy.GetHTTPClient(useProxy)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, "", err

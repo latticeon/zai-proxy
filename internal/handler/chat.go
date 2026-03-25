@@ -19,6 +19,8 @@ import (
 )
 
 func HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
+	useProxy := shouldUseProxy(r)
+
 	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if token == "" {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -26,7 +28,7 @@ func HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if token == "free" {
-		anonymousToken, err := auth.GetAnonymousToken()
+		anonymousToken, err := auth.GetAnonymousToken(useProxy)
 		if err != nil {
 			logger.LogError("Failed to get anonymous token: %v", err)
 			http.Error(w, "Failed to get anonymous token", http.StatusInternalServerError)
@@ -45,7 +47,7 @@ func HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		req.Model = "GLM-4.6"
 	}
 
-	resp, modelName, err := upstream.MakeUpstreamRequest(token, req.Messages, req.Model, req.Tools, req.ToolChoice)
+	resp, modelName, err := upstream.MakeUpstreamRequest(token, req.Messages, req.Model, req.Tools, req.ToolChoice, useProxy)
 	if err != nil {
 		logger.LogError("Upstream request failed: %v", err)
 		http.Error(w, "Upstream error", http.StatusBadGateway)

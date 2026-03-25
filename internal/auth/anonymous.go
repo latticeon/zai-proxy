@@ -13,8 +13,8 @@ type AnonymousAuthResponse struct {
 }
 
 // GetAnonymousToken 从 z.ai 获取匿名 token
-func GetAnonymousToken() (string, error) {
-	resp, err := proxy.GetHTTPClient().Get("https://chat.z.ai/api/v1/auths/")
+func GetAnonymousToken(useProxy bool) (string, error) {
+	resp, err := proxy.GetHTTPClient(useProxy).Get("https://chat.z.ai/api/v1/auths/")
 	if err != nil {
 		return "", err
 	}

@@ -22,6 +22,16 @@ var (
 	mu      sync.RWMutex
 )
 
+func HasAvailableProxies() bool {
+	mu.RLock()
+	defer mu.RUnlock()
+	return len(proxies) > 0
+}
+
+func shouldUseConfiguredProxy(useProxy bool) bool {
+	return useProxy && HasAvailableProxies()
+}
+
 // LoadProxies 从 proxies.txt 文件加载代理列表
 // 支持格式:
 //   - socks5://user:pass@host:port
@@ -125,8 +135,13 @@ func parseProxyLine(line string) *proxyInfo {
 	}
 }
 
-// GetHTTPClient 返回一个配置了随机代理的 http.Client
-func GetHTTPClient() *http.Client {
+// GetHTTPClient 返回一个按请求配置的 http.Client。
+// 仅当 useProxy=true 且存在可用代理时才会走代理，否则直连。
+func GetHTTPClient(useProxy bool) *http.Client {
+	if !shouldUseConfiguredProxy(useProxy) {
+		return &http.Client{}
+	}
+
 	info := getRandomProxyInfo()
 	if info == nil {
 		return &http.Client{}

@@ -45,7 +45,7 @@ type UpstreamFile struct {
 }
 
 // UploadImageFromURL 从 URL 或 base64 上传图片到 z.ai
-func UploadImageFromURL(token string, imageURL string) (*UpstreamFile, error) {
+func UploadImageFromURL(token string, imageURL string, useProxy bool) (*UpstreamFile, error) {
 	var imageData []byte
 	var filename string
 	var contentType string
@@ -88,7 +88,7 @@ func UploadImageFromURL(token string, imageURL string) (*UpstreamFile, error) {
 		filename = uuid.New().String()[:12] + ext
 	} else {
 		// 从 URL 下载图片
-		resp, err := proxy.GetHTTPClient().Get(imageURL)
+		resp, err := proxy.GetHTTPClient(useProxy).Get(imageURL)
 		if err != nil {
 			return nil, fmt.Errorf("failed to download image: %v", err)
 		}
@@ -145,7 +145,7 @@ func UploadImageFromURL(token string, imageURL string) (*UpstreamFile, error) {
 	req.Header.Set("Origin", "https://chat.z.ai")
 	req.Header.Set("Referer", "https://chat.z.ai/")
 
-	client := proxy.GetHTTPClient()
+	client := proxy.GetHTTPClient(useProxy)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload image: %v", err)
@@ -177,10 +177,10 @@ func UploadImageFromURL(token string, imageURL string) (*UpstreamFile, error) {
 }
 
 // UploadImages 批量上传图片
-func UploadImages(token string, imageURLs []string) ([]*UpstreamFile, error) {
+func UploadImages(token string, imageURLs []string, useProxy bool) ([]*UpstreamFile, error) {
 	var files []*UpstreamFile
 	for _, url := range imageURLs {
-		file, err := UploadImageFromURL(token, url)
+		file, err := UploadImageFromURL(token, url, useProxy)
 		if err != nil {
 			logger.LogError("Failed to upload image %s: %v", url[:min(50, len(url))], err)
 			continue

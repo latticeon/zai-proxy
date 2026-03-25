@@ -19,6 +19,8 @@ import (
 
 // HandleMessages handles Anthropic Messages API requests (/v1/messages)
 func HandleMessages(w http.ResponseWriter, r *http.Request) {
+	useProxy := shouldUseProxy(r)
+
 	// Extract token from x-api-key or Authorization header
 	token := r.Header.Get("x-api-key")
 	if token == "" {
@@ -30,7 +32,7 @@ func HandleMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if token == "free" {
-		anonymousToken, err := auth.GetAnonymousToken()
+		anonymousToken, err := auth.GetAnonymousToken(useProxy)
 		if err != nil {
 			logger.LogError("Failed to get anonymous token: %v", err)
 			writeAnthropicError(w, http.StatusInternalServerError, "api_error", "Failed to get anonymous token")
@@ -61,7 +63,7 @@ func HandleMessages(w http.ResponseWriter, r *http.Request) {
 	// Convert Anthropic messages to internal format
 	messages, tools, toolChoice := convertAnthropicToInternal(req)
 
-	resp, modelName, err := upstream.MakeUpstreamRequest(token, messages, resolvedModel, tools, toolChoice)
+	resp, modelName, err := upstream.MakeUpstreamRequest(token, messages, resolvedModel, tools, toolChoice, useProxy)
 	if err != nil {
 		logger.LogError("Upstream request failed: %v", err)
 		writeAnthropicError(w, http.StatusBadGateway, "api_error", "Upstream error")
