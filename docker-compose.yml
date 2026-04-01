@@ -1,0 +1,11 @@
+services:
+  zai-proxy:
+    image: ghcr.io/latticeon/zai-proxy:latest
+    ports:
+      - "2262:8000"
+    environment:
+      - LOG_LEVEL=info
+    restart: unless-stopped
+    volumes:
+      # 挂载代理文件到容器内的 /app/proxies.txt
+      - ./proxies.txt:/app/proxies.txt
