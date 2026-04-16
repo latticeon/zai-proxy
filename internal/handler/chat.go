@@ -48,7 +48,7 @@ func HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		req.Model = "GLM-4.6"
 	}
 
-	logRequestLifecycleStart("chat", r, useProxy, req.Stream, separatorRuleEnabled)
+	logRequestLifecycleStart("chat", r, useProxy, req.Stream, separatorRuleEnabled, req.Model)
 
 	resp, modelName, err := upstream.MakeUpstreamRequestWithSeparatorRule(token, req.Messages, req.Model, req.Tools, req.ToolChoice, useProxy, separatorRuleEnabled)
 	if err != nil {
@@ -77,7 +77,7 @@ func HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	} else {
 		truncated = handleNonStreamResponseWithSeparatorRule(w, resp.Body, completionID, modelName, req.Tools, separatorRuleEnabled)
 	}
-	logRequestLifecycleFinish("chat", r, useProxy, req.Stream, separatorRuleEnabled, truncated)
+	logRequestLifecycleFinish("chat", r, useProxy, req.Stream, separatorRuleEnabled, truncated, req.Model)
 }
 
 func handleStreamResponse(w http.ResponseWriter, body io.ReadCloser, completionID, modelName string, tools []model.Tool) bool {
@@ -113,7 +113,7 @@ func handleStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.ReadCl
 		logger.LogDebug("[Upstream] %s", line)
 
 		if !strings.HasPrefix(line, "data: ") {
-			logger.LogInfo("[DEBUG-Stream] non-data line: %s", truncate(line, 200))
+			logger.LogDebug("[DEBUG-Stream] non-data line: %s", truncate(line, 200))
 			continue
 		}
 
@@ -124,7 +124,7 @@ func handleStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.ReadCl
 
 		var upstreamData model.UpstreamData
 		if err := json.Unmarshal([]byte(payload), &upstreamData); err != nil {
-			logger.LogInfo("[DEBUG-Stream] JSON parse error: %v, payload=%s", err, truncate(payload, 300))
+			logger.LogDebug("[DEBUG-Stream] JSON parse error: %v, payload=%s", err, truncate(payload, 300))
 			continue
 		}
 		sanitizeUpstreamData(&upstreamData, separatorRuleEnabled)
@@ -132,7 +132,7 @@ func handleStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.ReadCl
 			truncatedByUpstream = true
 		}
 
-		logger.LogInfo("[DEBUG-Stream] phase=%s delta_content_len=%d edit_content_len=%d", upstreamData.Data.Phase, len(upstreamData.Data.DeltaContent), len(upstreamData.Data.EditContent))
+		logger.LogDebug("[DEBUG-Stream] phase=%s delta_content_len=%d edit_content_len=%d", upstreamData.Data.Phase, len(upstreamData.Data.DeltaContent), len(upstreamData.Data.EditContent))
 
 		if upstreamData.Data.Phase == "done" && upstreamData.GetFallbackContent() == "" {
 			break
@@ -246,7 +246,7 @@ func handleStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.ReadCl
 		}
 		// 检测用户定义的函数调用（tool_call 阶段，非 mcp/search）
 		if upstreamData.Data.Phase == "tool_call" && editContent != "" {
-			logger.LogInfo("[ToolCall] phase=%s edit_content=%s", upstreamData.Data.Phase, editContent)
+			logger.LogDebug("[ToolCall] phase=%s edit_content=%s", upstreamData.Data.Phase, editContent)
 		}
 		if len(tools) > 0 && editContent != "" && filter.IsFunctionToolCall(editContent, upstreamData.Data.Phase) {
 			if toolCalls := filter.ParseFunctionToolCalls(editContent); len(toolCalls) > 0 {
@@ -640,7 +640,7 @@ func handleNonStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.Rea
 
 		var upstreamData model.UpstreamData
 		if err := json.Unmarshal([]byte(payload), &upstreamData); err != nil {
-			logger.LogInfo("[DEBUG-NonStream] JSON parse error: %v, payload=%s", err, truncate(payload, 200))
+			logger.LogDebug("[DEBUG-NonStream] JSON parse error: %v, payload=%s", err, truncate(payload, 200))
 			continue
 		}
 		sanitizeUpstreamData(&upstreamData, separatorRuleEnabled)
@@ -648,7 +648,7 @@ func handleNonStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.Rea
 			truncatedByUpstream = true
 		}
 
-		logger.LogInfo("[DEBUG-NonStream] phase=%s delta_content_len=%d edit_content_len=%d", upstreamData.Data.Phase, len(upstreamData.Data.DeltaContent), len(upstreamData.Data.EditContent))
+		logger.LogDebug("[DEBUG-NonStream] phase=%s delta_content_len=%d edit_content_len=%d", upstreamData.Data.Phase, len(upstreamData.Data.DeltaContent), len(upstreamData.Data.EditContent))
 
 		if upstreamData.Data.Phase == "done" && upstreamData.GetFallbackContent() == "" {
 			break
@@ -707,7 +707,7 @@ func handleNonStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.Rea
 		}
 		// 检测用户定义的函数调用
 		if upstreamData.Data.Phase == "tool_call" && editContent != "" {
-			logger.LogInfo("[ToolCall] phase=%s edit_content=%s", upstreamData.Data.Phase, editContent)
+			logger.LogDebug("[ToolCall] phase=%s edit_content=%s", upstreamData.Data.Phase, editContent)
 		}
 		if len(tools) > 0 && editContent != "" && filter.IsFunctionToolCall(editContent, upstreamData.Data.Phase) {
 			if toolCalls := filter.ParseFunctionToolCalls(editContent); len(toolCalls) > 0 {

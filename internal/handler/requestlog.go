@@ -65,6 +65,13 @@ func streamModeLabel(stream bool) string {
 	return "non-stream"
 }
 
+func proxyModeLabel(useProxy bool) string {
+	if useProxy && proxy.HasAvailableProxies() {
+		return "proxy"
+	}
+	return "direct"
+}
+
 func separatorRuleLabel(enabled bool) string {
 	if enabled {
 		return "on"
@@ -72,16 +79,16 @@ func separatorRuleLabel(enabled bool) string {
 	return "off"
 }
 
-func logRequestLifecycleStart(label string, r *http.Request, useProxy, stream, separatorRuleEnabled bool) {
-	logger.LogInfo("[%s] %s 请求开始 method=%s path=%s client=%s separator_rule=%s", routeLabel(useProxy), label, r.Method, r.URL.Path, streamModeLabel(stream), separatorRuleLabel(separatorRuleEnabled))
+func logRequestLifecycleStart(label string, r *http.Request, useProxy, stream, separatorRuleEnabled bool, requestModel string) {
+	logger.LogInfo("[%s] %s 请求开始 method=%s path=%s model=%s proxy=%s client=%s separator_rule=%s", routeLabel(useProxy), label, r.Method, r.URL.Path, requestModel, proxyModeLabel(useProxy), streamModeLabel(stream), separatorRuleLabel(separatorRuleEnabled))
 }
 
-func logRequestLifecycleFinish(label string, r *http.Request, useProxy, stream, separatorRuleEnabled, truncated bool) {
+func logRequestLifecycleFinish(label string, r *http.Request, useProxy, stream, separatorRuleEnabled, truncated bool, requestModel string) {
 	result := "完成响应"
 	if truncated {
 		result = "响应被z.ai截断"
 	}
-	logger.LogInfo("[%s] %s 请求结束 method=%s path=%s client=%s separator_rule=%s result=%s", routeLabel(useProxy), label, r.Method, r.URL.Path, streamModeLabel(stream), separatorRuleLabel(separatorRuleEnabled), result)
+	logger.LogInfo("[%s] %s 请求结束 method=%s path=%s model=%s proxy=%s client=%s separator_rule=%s result=%s", routeLabel(useProxy), label, r.Method, r.URL.Path, requestModel, proxyModeLabel(useProxy), streamModeLabel(stream), separatorRuleLabel(separatorRuleEnabled), result)
 }
 
 func logRequestSummary(label string, startedAt time.Time, statusCode, charCount int, r *http.Request, useProxy bool) {

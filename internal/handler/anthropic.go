@@ -64,7 +64,7 @@ func HandleMessages(w http.ResponseWriter, r *http.Request) {
 	// Convert Anthropic messages to internal format
 	messages, tools, toolChoice := convertAnthropicToInternal(req)
 
-	logRequestLifecycleStart("messages", r, useProxy, req.Stream, separatorRuleEnabled)
+	logRequestLifecycleStart("messages", r, useProxy, req.Stream, separatorRuleEnabled, req.Model)
 
 	resp, modelName, err := upstream.MakeUpstreamRequestWithSeparatorRule(token, messages, resolvedModel, tools, toolChoice, useProxy, separatorRuleEnabled)
 	if err != nil {
@@ -93,7 +93,7 @@ func HandleMessages(w http.ResponseWriter, r *http.Request) {
 	} else {
 		truncated = handleAnthropicNonStreamWithSeparatorRule(w, resp.Body, messageID, modelName, req.Model, tools, separatorRuleEnabled)
 	}
-	logRequestLifecycleFinish("messages", r, useProxy, req.Stream, separatorRuleEnabled, truncated)
+	logRequestLifecycleFinish("messages", r, useProxy, req.Stream, separatorRuleEnabled, truncated, req.Model)
 }
 
 // convertAnthropicToInternal converts Anthropic request format to internal Message/Tool format
