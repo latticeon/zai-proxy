@@ -39,6 +39,22 @@ func ExtractAllImageURLs(messages []model.Message) []string {
 	return allImageURLs
 }
 
+func insertMessageBeforeLast(messages []map[string]interface{}, msg map[string]interface{}) []map[string]interface{} {
+	if msg == nil {
+		return messages
+	}
+	if len(messages) == 0 {
+		return []map[string]interface{}{msg}
+	}
+
+	insertAt := len(messages) - 1
+	result := make([]map[string]interface{}, 0, len(messages)+1)
+	result = append(result, messages[:insertAt]...)
+	result = append(result, msg)
+	result = append(result, messages[insertAt:]...)
+	return result
+}
+
 func MakeUpstreamRequest(token string, messages []model.Message, modelName string, tools []model.Tool, toolChoice interface{}, useProxy bool) (*http.Response, string, error) {
 	return MakeUpstreamRequestWithSeparatorRule(token, messages, modelName, tools, toolChoice, useProxy, false)
 }
@@ -121,9 +137,6 @@ func MakeUpstreamRequestWithSeparatorRule(token string, messages []model.Message
 	// 提取 system 消息并转为 user+assistant 对注入对话开头
 	// z.ai 会忽略 system 角色消息
 	var systemTexts []string
-	if enableSeparatorRule {
-		systemTexts = append(systemTexts, separatorrule.SystemRule)
-	}
 	var nonSystemMessages []model.Message
 	for _, msg := range messages {
 		if msg.Role == "system" {
@@ -196,6 +209,14 @@ func MakeUpstreamRequestWithSeparatorRule(token string, messages []model.Message
 			"content": "Understood. I will follow these instructions.",
 		}
 		upstreamMessages = append([]map[string]interface{}{systemUserMsg, systemAssistantMsg}, upstreamMessages...)
+	}
+
+	if enableSeparatorRule {
+		logger.LogDebug("[SeparatorRule] Injecting separator rule as user message before the last upstream message")
+		upstreamMessages = insertMessageBeforeLast(upstreamMessages, map[string]interface{}{
+			"role":    "user",
+			"content": separatorrule.SystemRule,
+		})
 	}
 
 	body := map[string]interface{}{
