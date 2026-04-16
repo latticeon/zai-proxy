@@ -20,6 +20,7 @@ import (
 
 func HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	useProxy := shouldUseProxy(r)
+	separatorRuleEnabled := shouldEnableSeparatorRule(r)
 
 	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if token == "" {
@@ -47,7 +48,7 @@ func HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		req.Model = "GLM-4.6"
 	}
 
-	resp, modelName, err := upstream.MakeUpstreamRequest(token, req.Messages, req.Model, req.Tools, req.ToolChoice, useProxy)
+	resp, modelName, err := upstream.MakeUpstreamRequestWithSeparatorRule(token, req.Messages, req.Model, req.Tools, req.ToolChoice, useProxy, separatorRuleEnabled)
 	if err != nil {
 		logger.LogError("Upstream request failed: %v", err)
 		http.Error(w, "Upstream error", http.StatusBadGateway)
@@ -69,13 +70,17 @@ func HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	completionID := fmt.Sprintf("chatcmpl-%s", uuid.New().String()[:29])
 
 	if req.Stream {
-		handleStreamResponse(w, resp.Body, completionID, modelName, req.Tools)
+		handleStreamResponseWithSeparatorRule(w, resp.Body, completionID, modelName, req.Tools, separatorRuleEnabled)
 	} else {
-		handleNonStreamResponse(w, resp.Body, completionID, modelName, req.Tools)
+		handleNonStreamResponseWithSeparatorRule(w, resp.Body, completionID, modelName, req.Tools, separatorRuleEnabled)
 	}
 }
 
 func handleStreamResponse(w http.ResponseWriter, body io.ReadCloser, completionID, modelName string, tools []model.Tool) {
+	handleStreamResponseWithSeparatorRule(w, body, completionID, modelName, tools, false)
+}
+
+func handleStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.ReadCloser, completionID, modelName string, tools []model.Tool, separatorRuleEnabled bool) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -117,6 +122,7 @@ func handleStreamResponse(w http.ResponseWriter, body io.ReadCloser, completionI
 			logger.LogInfo("[DEBUG-Stream] JSON parse error: %v, payload=%s", err, truncate(payload, 300))
 			continue
 		}
+		sanitizeUpstreamData(&upstreamData, separatorRuleEnabled)
 
 		logger.LogInfo("[DEBUG-Stream] phase=%s delta_content_len=%d edit_content_len=%d", upstreamData.Data.Phase, len(upstreamData.Data.DeltaContent), len(upstreamData.Data.EditContent))
 
@@ -591,6 +597,10 @@ func handleStreamResponse(w http.ResponseWriter, body io.ReadCloser, completionI
 }
 
 func handleNonStreamResponse(w http.ResponseWriter, body io.ReadCloser, completionID, modelName string, tools []model.Tool) {
+	handleNonStreamResponseWithSeparatorRule(w, body, completionID, modelName, tools, false)
+}
+
+func handleNonStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.ReadCloser, completionID, modelName string, tools []model.Tool, separatorRuleEnabled bool) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 	var chunks []string
@@ -618,6 +628,7 @@ func handleNonStreamResponse(w http.ResponseWriter, body io.ReadCloser, completi
 			logger.LogInfo("[DEBUG-NonStream] JSON parse error: %v, payload=%s", err, truncate(payload, 200))
 			continue
 		}
+		sanitizeUpstreamData(&upstreamData, separatorRuleEnabled)
 
 		logger.LogInfo("[DEBUG-NonStream] phase=%s delta_content_len=%d edit_content_len=%d", upstreamData.Data.Phase, len(upstreamData.Data.DeltaContent), len(upstreamData.Data.EditContent))
 

@@ -217,6 +217,13 @@ curl http://localhost:8000/v1/messages \
 - 流式 SSE 事件（`message_start` / `content_block_delta` / `message_stop` 等）
 - 非流式 JSON 响应
 
+## 可选请求头
+
+| 请求头 | 说明 |
+|--------|------|
+| `X-Use-Proxy: 1` | 为当前请求启用代理池 |
+| `X-Enable-Separator-Rule: 1` | 为当前请求临时注入字符分隔规则；上游会按规则生成，但代理会在返回客户端前自动删除 `¿` |
+
 ## 支持的模型
 
 ### GLM 模型

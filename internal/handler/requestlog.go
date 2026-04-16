@@ -9,6 +9,7 @@ import (
 
 	"zai-proxy/internal/logger"
 	"zai-proxy/internal/proxy"
+	"zai-proxy/internal/separatorrule"
 )
 
 const useProxyHeader = "X-Use-Proxy"
@@ -44,6 +45,10 @@ func (w *responseMetricsWriter) Flush() {
 
 func shouldUseProxy(r *http.Request) bool {
 	return strings.TrimSpace(r.Header.Get(useProxyHeader)) == "1"
+}
+
+func shouldEnableSeparatorRule(r *http.Request) bool {
+	return separatorrule.IsEnabled(r.Header.Get(separatorrule.Header))
 }
 
 func routeLabel(useProxy bool) string {

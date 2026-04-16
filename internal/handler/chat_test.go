@@ -647,3 +647,54 @@ func TestNonStreamResponse_NoDeltaField(t *testing.T) {
 		t.Error("non-streaming response should not contain delta field")
 	}
 }
+
+func TestShouldEnableSeparatorRule(t *testing.T) {
+	req := httptest.NewRequest("POST", "/v1/chat/completions", nil)
+	req.Header.Set("X-Enable-Separator-Rule", "1")
+
+	if !shouldEnableSeparatorRule(req) {
+		t.Fatal("separator rule header should enable the feature")
+	}
+}
+
+func TestStreamResponse_StripsSeparatorRuleOutput(t *testing.T) {
+	body := newFakeBody(
+		sseEvent("answer", "你¿好", ""),
+		sseEventDone(),
+	)
+
+	w := httptest.NewRecorder()
+	handleStreamResponseWithSeparatorRule(w, body, "chatcmpl-test", "glm-4.7", nil, true)
+
+	result := w.Body.String()
+	if strings.Contains(result, "¿") {
+		t.Fatal("stream output should not contain separator characters")
+	}
+	if !strings.Contains(result, "你好") {
+		t.Fatal("stream output should contain the cleaned content")
+	}
+}
+
+func TestNonStreamResponse_StripsSeparatorRuleOutput(t *testing.T) {
+	body := newFakeBody(
+		sseEvent("answer", "内¿容", ""),
+		sseEvent("answer", "测¿试", ""),
+		sseEventDone(),
+	)
+
+	w := httptest.NewRecorder()
+	handleNonStreamResponseWithSeparatorRule(w, body, "chatcmpl-test", "glm-4.7", nil, true)
+
+	var resp model.ChatCompletionResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	msg := resp.Choices[0].Message
+	if msg.Content != "内容测试" {
+		t.Fatalf("Content = %q, want %q", msg.Content, "内容测试")
+	}
+	if strings.Contains(msg.Content, "¿") {
+		t.Fatal("content should not contain separator characters")
+	}
+}

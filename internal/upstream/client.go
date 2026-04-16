@@ -15,6 +15,7 @@ import (
 	"zai-proxy/internal/logger"
 	"zai-proxy/internal/model"
 	"zai-proxy/internal/proxy"
+	"zai-proxy/internal/separatorrule"
 	builtintools "zai-proxy/internal/tools"
 	"zai-proxy/internal/version"
 )
@@ -39,6 +40,10 @@ func ExtractAllImageURLs(messages []model.Message) []string {
 }
 
 func MakeUpstreamRequest(token string, messages []model.Message, modelName string, tools []model.Tool, toolChoice interface{}, useProxy bool) (*http.Response, string, error) {
+	return MakeUpstreamRequestWithSeparatorRule(token, messages, modelName, tools, toolChoice, useProxy, false)
+}
+
+func MakeUpstreamRequestWithSeparatorRule(token string, messages []model.Message, modelName string, tools []model.Tool, toolChoice interface{}, useProxy bool, enableSeparatorRule bool) (*http.Response, string, error) {
 	payload, err := auth.DecodeJWTPayload(token)
 	if err != nil || payload == nil {
 		return nil, "", fmt.Errorf("invalid token")
@@ -116,6 +121,9 @@ func MakeUpstreamRequest(token string, messages []model.Message, modelName strin
 	// 提取 system 消息并转为 user+assistant 对注入对话开头
 	// z.ai 会忽略 system 角色消息
 	var systemTexts []string
+	if enableSeparatorRule {
+		systemTexts = append(systemTexts, separatorrule.SystemRule)
+	}
 	var nonSystemMessages []model.Message
 	for _, msg := range messages {
 		if msg.Role == "system" {

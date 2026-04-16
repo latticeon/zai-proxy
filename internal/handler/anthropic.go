@@ -20,6 +20,7 @@ import (
 // HandleMessages handles Anthropic Messages API requests (/v1/messages)
 func HandleMessages(w http.ResponseWriter, r *http.Request) {
 	useProxy := shouldUseProxy(r)
+	separatorRuleEnabled := shouldEnableSeparatorRule(r)
 
 	// Extract token from x-api-key or Authorization header
 	token := r.Header.Get("x-api-key")
@@ -63,7 +64,7 @@ func HandleMessages(w http.ResponseWriter, r *http.Request) {
 	// Convert Anthropic messages to internal format
 	messages, tools, toolChoice := convertAnthropicToInternal(req)
 
-	resp, modelName, err := upstream.MakeUpstreamRequest(token, messages, resolvedModel, tools, toolChoice, useProxy)
+	resp, modelName, err := upstream.MakeUpstreamRequestWithSeparatorRule(token, messages, resolvedModel, tools, toolChoice, useProxy, separatorRuleEnabled)
 	if err != nil {
 		logger.LogError("Upstream request failed: %v", err)
 		writeAnthropicError(w, http.StatusBadGateway, "api_error", "Upstream error")
@@ -85,9 +86,9 @@ func HandleMessages(w http.ResponseWriter, r *http.Request) {
 	messageID := fmt.Sprintf("msg_%s", uuid.New().String()[:24])
 
 	if req.Stream {
-		handleAnthropicStream(w, resp.Body, messageID, modelName, req.Model, tools)
+		handleAnthropicStreamWithSeparatorRule(w, resp.Body, messageID, modelName, req.Model, tools, separatorRuleEnabled)
 	} else {
-		handleAnthropicNonStream(w, resp.Body, messageID, modelName, req.Model, tools)
+		handleAnthropicNonStreamWithSeparatorRule(w, resp.Body, messageID, modelName, req.Model, tools, separatorRuleEnabled)
 	}
 }
 
@@ -250,6 +251,10 @@ func convertAnthropicToInternal(req model.AnthropicRequest) ([]model.Message, []
 
 // handleAnthropicStream processes upstream SSE and converts to Anthropic streaming format
 func handleAnthropicStream(w http.ResponseWriter, body io.ReadCloser, messageID, modelName, requestModel string, tools []model.Tool) {
+	handleAnthropicStreamWithSeparatorRule(w, body, messageID, modelName, requestModel, tools, false)
+}
+
+func handleAnthropicStreamWithSeparatorRule(w http.ResponseWriter, body io.ReadCloser, messageID, modelName, requestModel string, tools []model.Tool, separatorRuleEnabled bool) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -308,6 +313,7 @@ func handleAnthropicStream(w http.ResponseWriter, body io.ReadCloser, messageID,
 		if err := json.Unmarshal([]byte(payload), &upstreamData); err != nil {
 			continue
 		}
+		sanitizeUpstreamData(&upstreamData, separatorRuleEnabled)
 
 		if upstreamData.Data.Phase == "done" {
 			break
@@ -673,6 +679,10 @@ func handleAnthropicStream(w http.ResponseWriter, body io.ReadCloser, messageID,
 
 // handleAnthropicNonStream collects all upstream data and returns an Anthropic response
 func handleAnthropicNonStream(w http.ResponseWriter, body io.ReadCloser, messageID, modelName, requestModel string, tools []model.Tool) {
+	handleAnthropicNonStreamWithSeparatorRule(w, body, messageID, modelName, requestModel, tools, false)
+}
+
+func handleAnthropicNonStreamWithSeparatorRule(w http.ResponseWriter, body io.ReadCloser, messageID, modelName, requestModel string, tools []model.Tool, separatorRuleEnabled bool) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 
@@ -698,6 +708,7 @@ func handleAnthropicNonStream(w http.ResponseWriter, body io.ReadCloser, message
 		if err := json.Unmarshal([]byte(payload), &upstreamData); err != nil {
 			continue
 		}
+		sanitizeUpstreamData(&upstreamData, separatorRuleEnabled)
 
 		if upstreamData.Data.Phase == "done" {
 			break
