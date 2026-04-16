@@ -48,6 +48,8 @@ func HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		req.Model = "GLM-4.6"
 	}
 
+	logRequestLifecycleStart("chat", r, useProxy, req.Stream, separatorRuleEnabled)
+
 	resp, modelName, err := upstream.MakeUpstreamRequestWithSeparatorRule(token, req.Messages, req.Model, req.Tools, req.ToolChoice, useProxy, separatorRuleEnabled)
 	if err != nil {
 		logger.LogError("Upstream request failed: %v", err)
@@ -68,19 +70,21 @@ func HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	completionID := fmt.Sprintf("chatcmpl-%s", uuid.New().String()[:29])
+	truncated := false
 
 	if req.Stream {
-		handleStreamResponseWithSeparatorRule(w, resp.Body, completionID, modelName, req.Tools, separatorRuleEnabled)
+		truncated = handleStreamResponseWithSeparatorRule(w, resp.Body, completionID, modelName, req.Tools, separatorRuleEnabled)
 	} else {
-		handleNonStreamResponseWithSeparatorRule(w, resp.Body, completionID, modelName, req.Tools, separatorRuleEnabled)
+		truncated = handleNonStreamResponseWithSeparatorRule(w, resp.Body, completionID, modelName, req.Tools, separatorRuleEnabled)
 	}
+	logRequestLifecycleFinish("chat", r, useProxy, req.Stream, separatorRuleEnabled, truncated)
 }
 
-func handleStreamResponse(w http.ResponseWriter, body io.ReadCloser, completionID, modelName string, tools []model.Tool) {
-	handleStreamResponseWithSeparatorRule(w, body, completionID, modelName, tools, false)
+func handleStreamResponse(w http.ResponseWriter, body io.ReadCloser, completionID, modelName string, tools []model.Tool) bool {
+	return handleStreamResponseWithSeparatorRule(w, body, completionID, modelName, tools, false)
 }
 
-func handleStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.ReadCloser, completionID, modelName string, tools []model.Tool, separatorRuleEnabled bool) {
+func handleStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.ReadCloser, completionID, modelName string, tools []model.Tool, separatorRuleEnabled bool) bool {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -88,7 +92,7 @@ func handleStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.ReadCl
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
-		return
+		return false
 	}
 
 	scanner := bufio.NewScanner(body)
@@ -102,6 +106,7 @@ func handleStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.ReadCl
 	hasToolCalls := false
 	var collectedToolCalls []model.ToolCall
 	promptToolBuffer := "" // 用于 prompt 注入模式下缓冲 answer 文本以检测 <tool_call>
+	truncatedByUpstream := false
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -123,6 +128,9 @@ func handleStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.ReadCl
 			continue
 		}
 		sanitizeUpstreamData(&upstreamData, separatorRuleEnabled)
+		if upstreamData.Data.Error != nil {
+			truncatedByUpstream = true
+		}
 
 		logger.LogInfo("[DEBUG-Stream] phase=%s delta_content_len=%d edit_content_len=%d", upstreamData.Data.Phase, len(upstreamData.Data.DeltaContent), len(upstreamData.Data.EditContent))
 
@@ -599,13 +607,14 @@ func handleStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.ReadCl
 	fmt.Fprintf(w, "data: %s\n\n", data)
 	fmt.Fprintf(w, "data: [DONE]\n\n")
 	flusher.Flush()
+	return truncatedByUpstream
 }
 
-func handleNonStreamResponse(w http.ResponseWriter, body io.ReadCloser, completionID, modelName string, tools []model.Tool) {
-	handleNonStreamResponseWithSeparatorRule(w, body, completionID, modelName, tools, false)
+func handleNonStreamResponse(w http.ResponseWriter, body io.ReadCloser, completionID, modelName string, tools []model.Tool) bool {
+	return handleNonStreamResponseWithSeparatorRule(w, body, completionID, modelName, tools, false)
 }
 
-func handleNonStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.ReadCloser, completionID, modelName string, tools []model.Tool, separatorRuleEnabled bool) {
+func handleNonStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.ReadCloser, completionID, modelName string, tools []model.Tool, separatorRuleEnabled bool) bool {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 	var chunks []string
@@ -616,6 +625,7 @@ func handleNonStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.Rea
 	pendingSourcesMarkdown := ""
 	pendingImageSearchMarkdown := ""
 	var collectedToolCalls []model.ToolCall
+	truncatedByUpstream := false
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -634,6 +644,9 @@ func handleNonStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.Rea
 			continue
 		}
 		sanitizeUpstreamData(&upstreamData, separatorRuleEnabled)
+		if upstreamData.Data.Error != nil {
+			truncatedByUpstream = true
+		}
 
 		logger.LogInfo("[DEBUG-NonStream] phase=%s delta_content_len=%d edit_content_len=%d", upstreamData.Data.Phase, len(upstreamData.Data.DeltaContent), len(upstreamData.Data.EditContent))
 
@@ -796,6 +809,7 @@ func handleNonStreamResponseWithSeparatorRule(w http.ResponseWriter, body io.Rea
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+	return truncatedByUpstream
 }
 
 // sendContentChunk 发送一个 content SSE chunk
