@@ -12,4 +12,8 @@ func sanitizeUpstreamData(upstreamData *model.UpstreamData, enabled bool) {
 
 	upstreamData.Data.DeltaContent = separatorrule.Strip(upstreamData.Data.DeltaContent)
 	upstreamData.Data.EditContent = separatorrule.Strip(upstreamData.Data.EditContent)
+	upstreamData.Data.Content = separatorrule.Strip(upstreamData.Data.Content)
+	if upstreamData.Data.Error != nil {
+		upstreamData.Data.Error.Detail = separatorrule.Strip(upstreamData.Data.Error.Detail)
+	}
 }

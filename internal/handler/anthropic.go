@@ -315,7 +315,7 @@ func handleAnthropicStreamWithSeparatorRule(w http.ResponseWriter, body io.ReadC
 		}
 		sanitizeUpstreamData(&upstreamData, separatorRuleEnabled)
 
-		if upstreamData.Data.Phase == "done" {
+		if upstreamData.Data.Phase == "done" && upstreamData.GetFallbackContent() == "" {
 			break
 		}
 
@@ -466,6 +466,7 @@ func handleAnthropicStreamWithSeparatorRule(w http.ResponseWriter, body io.ReadC
 
 		// Extract content
 		content := ""
+		fallbackContent := upstreamData.GetFallbackContent()
 		if upstreamData.Data.Phase == "answer" && upstreamData.Data.DeltaContent != "" {
 			content = upstreamData.Data.DeltaContent
 		} else if upstreamData.Data.Phase == "answer" && editContent != "" {
@@ -488,6 +489,10 @@ func handleAnthropicStreamWithSeparatorRule(w http.ResponseWriter, body io.ReadC
 			} else {
 				content = editContent
 			}
+		}
+
+		if content == "" && fallbackContent != "" {
+			content = fallbackContent
 		}
 
 		if content == "" {
@@ -710,7 +715,7 @@ func handleAnthropicNonStreamWithSeparatorRule(w http.ResponseWriter, body io.Re
 		}
 		sanitizeUpstreamData(&upstreamData, separatorRuleEnabled)
 
-		if upstreamData.Data.Phase == "done" {
+		if upstreamData.Data.Phase == "done" && upstreamData.GetFallbackContent() == "" {
 			break
 		}
 
@@ -773,6 +778,7 @@ func handleAnthropicNonStreamWithSeparatorRule(w http.ResponseWriter, body io.Re
 		}
 
 		content := ""
+		fallbackContent := upstreamData.GetFallbackContent()
 		if upstreamData.Data.Phase == "answer" && upstreamData.Data.DeltaContent != "" {
 			content = upstreamData.Data.DeltaContent
 		} else if upstreamData.Data.Phase == "answer" && editContent != "" {
@@ -792,6 +798,10 @@ func handleAnthropicNonStreamWithSeparatorRule(w http.ResponseWriter, body io.Re
 			}
 		} else if (upstreamData.Data.Phase == "other" || upstreamData.Data.Phase == "tool_call") && editContent != "" {
 			content = editContent
+		}
+
+		if content == "" && fallbackContent != "" {
+			content = fallbackContent
 		}
 
 		if content != "" {

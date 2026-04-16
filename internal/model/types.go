@@ -43,7 +43,7 @@ type FunctionCall struct {
 // Message 支持纯文本和多模态内容
 type Message struct {
 	Role       string      `json:"role"`
-	Content    interface{} `json:"content"`              // string 或 []ContentPart
+	Content    interface{} `json:"content"`                // string 或 []ContentPart
 	ToolCallID string      `json:"tool_call_id,omitempty"` // role: "tool" 时使用
 	ToolCalls  []ToolCall  `json:"tool_calls,omitempty"`   // role: "assistant" 时使用
 }
@@ -212,14 +212,21 @@ type ImageSearchResult struct {
 	Thumbnail string `json:"thumbnail"`
 }
 
+type UpstreamError struct {
+	Code   string `json:"code"`
+	Detail string `json:"detail"`
+}
+
 // UpstreamData 上游返回的数据结构
 type UpstreamData struct {
 	Type string `json:"type"`
 	Data struct {
-		DeltaContent string `json:"delta_content"`
-		EditContent  string `json:"edit_content"`
-		Phase        string `json:"phase"`
-		Done         bool   `json:"done"`
+		DeltaContent string         `json:"delta_content"`
+		EditContent  string         `json:"edit_content"`
+		Content      string         `json:"content"`
+		Phase        string         `json:"phase"`
+		Done         bool           `json:"done"`
+		Error        *UpstreamError `json:"error,omitempty"`
 	} `json:"data"`
 }
 
@@ -237,4 +244,17 @@ func (u *UpstreamData) GetEditContent() string {
 	}
 
 	return editContent
+}
+
+func (u *UpstreamData) GetFallbackContent() string {
+	if u == nil {
+		return ""
+	}
+	if u.Data.Content == "" {
+		return ""
+	}
+	if !u.Data.Done && u.Data.Error == nil {
+		return ""
+	}
+	return u.Data.Content
 }

@@ -698,3 +698,44 @@ func TestNonStreamResponse_StripsSeparatorRuleOutput(t *testing.T) {
 		t.Fatal("content should not contain separator characters")
 	}
 }
+
+func TestStreamResponse_AppendsFallbackContentFromTerminalPacket(t *testing.T) {
+	body := newFakeBody(
+		sseEvent("answer", "第八天", ""),
+		`data: {"type":"chat:completion","data":{"content":"非常抱歉，我目前无法提供你需要的具体信息。","done":true,"error":{"code":"SENSITIVE","detail":"非常抱歉，我目前无法提供你需要的具体信息。"}}}`,
+		sseEventDone(),
+	)
+
+	w := httptest.NewRecorder()
+	handleStreamResponse(w, body, "chatcmpl-test", "glm-4.7", nil)
+
+	result := w.Body.String()
+	if !strings.Contains(result, "第八天") {
+		t.Fatal("stream output should contain the partial content")
+	}
+	if !strings.Contains(result, "非常抱歉，我目前无法提供你需要的具体信息。") {
+		t.Fatal("stream output should append the fallback content")
+	}
+}
+
+func TestNonStreamResponse_AppendsFallbackContentFromTerminalPacket(t *testing.T) {
+	body := newFakeBody(
+		sseEvent("answer", "第八天", ""),
+		`data: {"type":"chat:completion","data":{"content":"非常抱歉，我目前无法提供你需要的具体信息。","done":true,"error":{"code":"SENSITIVE","detail":"非常抱歉，我目前无法提供你需要的具体信息。"}}}`,
+		sseEventDone(),
+	)
+
+	w := httptest.NewRecorder()
+	handleNonStreamResponse(w, body, "chatcmpl-test", "glm-4.7", nil)
+
+	var resp model.ChatCompletionResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	msg := resp.Choices[0].Message
+	want := "第八天非常抱歉，我目前无法提供你需要的具体信息。"
+	if msg.Content != want {
+		t.Fatalf("Content = %q, want %q", msg.Content, want)
+	}
+}
